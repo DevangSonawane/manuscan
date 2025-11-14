@@ -1,3 +1,4 @@
+import 'package:manuscan/services/api_endpoints.dart';
 import 'package:manuscan/services/api_urls.dart';
 // ignore_for_file: avoid_print
 import 'package:get/get.dart';
@@ -8,6 +9,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../onboarding_screen.dart';
+import 'package:flutter/foundation.dart'; 
 
 class AuthController extends GetxController {
   final _isLoggedIn = false.obs;
@@ -126,89 +128,40 @@ class AuthController extends GetxController {
   // 🔧 UPDATED: Login method with MAC address validation
   Future<void> login(String email, String password) async {
     try {
-      _isLoading.value = true;
-      _errorMessage.value = '';
-      print('Login request for user: $email');
+      String macAddress =
+          kIsWeb ? 'web_dummy_mac' : await getDeviceMacAddress();
 
-      // 🔧 NEW: Get device MAC address
-      String macAddress = await getDeviceMacAddress();
-      print('Device MAC Address: $macAddress');
       final response = await http
           .post(
             Uri.parse('${ApiUrls.palletDispatchBase}/Login'),
-            headers: {
-              'Content-Type': 'application/json; charset=UTF-8',
-            },
+            headers: {'Content-Type': 'application/json; charset=UTF-8'},
             body: jsonEncode({
               'user_name': email,
               'password': password,
-              'mac_address': macAddress, // 🔧 NEW: Include MAC address
+              'mac_address': macAddress,
             }),
           )
           .timeout(const Duration(seconds: 10));
 
-      print('Login response: ${response.body}');
-
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
         _currentUser.value = responseData['user'];
-
-        if (responseData['user'] != null) {
-          final userData = responseData['user'] as Map<String, dynamic>;
-          _firstName.value = userData['first_name'] ?? 'Security Guard';
-          _lastName.value = userData['last_name'] ?? '';
-          _email.value = userData['email'] ?? '';
-          _userName.value = userData['user_name'] ?? '';
-
-          // Standardize role value
-          final rawRole = userData['role'] ?? 'user';
-          _role.value = rawRole.toString().toLowerCase().replaceAll(' ', '');
-
-          print('Set firstName to: $firstName');
-          print('Set role to: ${_role.value}');
-
-          _isLoggedIn.value = true;
-          _lastLogin.value = DateTime.now().toString();
-          await _saveLoginState();
-
-          // Implement role-based navigation
-          if (_role.value == 'securityguard' || _role.value == 'security' || _role.value == 'operator') {
-            Get.offNamed('/security');
-            print(
-                'Login successful - navigating to SecurityScreen for security role');
-          } else {
-            Get.offNamed('/home');
-            print(
-                'Login successful - navigating to HomeScreen for other roles');
-          }
-        }
-      } else if (response.statusCode == 403) {
-        // 🔧 NEW: Handle device not authorized error
-        final responseData = jsonDecode(response.body);
-        _errorMessage.value = responseData['error'] ?? 'Device not authorized';
-        print('Device authorization failed: ${response.body}');
-      } else if (response.statusCode == 401) {
-        // Handle invalid credentials
-        final responseData = jsonDecode(response.body);
-        _errorMessage.value = responseData['error'] ?? 'Invalid credentials';
-        print('Invalid credentials: ${response.body}');
+        _role.value = responseData['user']['role']?.toLowerCase() ?? 'user';
+        _isLoggedIn.value = true;
+        Get.offNamed(_role.value == 'securityguard' || _role.value == 'security'
+            ? '/security'
+            : '/home');
       } else {
         final responseData = jsonDecode(response.body);
-        _errorMessage.value = responseData['error'] ?? 'Failed to login';
-        print('Login failed: ${response.body}');
+        _errorMessage.value = responseData['error'] ?? 'Login failed';
       }
     } catch (e) {
-      print('Login error: $e');
-      if (e.toString().contains('TimeoutException')) {
-        _errorMessage.value =
-            'Connection timeout. Please check your internet connection.';
-      } else {
-        _errorMessage.value = 'Network error. Please try again.';
-      }
+      _errorMessage.value = 'Network error. Please try again.';
     } finally {
       _isLoading.value = false;
     }
   }
+  //
 
   Future<void> _saveLoginState() async {
     final prefs = await SharedPreferences.getInstance();

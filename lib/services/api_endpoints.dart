@@ -1,5 +1,5 @@
 class ApiEndpoints {
-  static const String baseUrl = 'YOUR_BASE_URL';
+  static const String baseUrl = 'http://10.200.32.43:8800';  //your-base-url
 
   // Dispatch endpoints
   static const String activeChallans = '$baseUrl/dispatch/active-challans';
